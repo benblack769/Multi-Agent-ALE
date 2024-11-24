@@ -6,98 +6,100 @@ on:
     branches: [ production ]
 
 jobs:
-  build_linux:
-    name: Linux Wheels
+  build-manylinux-wheels:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ['3.10']
-
     steps:
     - uses: actions/checkout@v3
-    
+    - name: Set up Python 
+      uses: actions/setup-python@v4
+      with:
+          python-version: 3.10
+    - name: Build manylinux container
+      run: docker build -f .github/Dockerfile.build-manylinux . -t ma-ale-manylinux
+    - name: Load wheels
+      run: docker cp $(docker create --name tc ma-ale-manylinux):/work/dist ./dist
+    - name: Test wheel on python 3.10
+      run: |
+          pip install ./dist/*cp310*.whl
+          python multi_agent_ale_py/tests/test_ale_python_wrapper.py
+    - name: Store wheels
+      uses: actions/upload-artifact@v4
+      with:
+        name: dist-manylinux
+        path: dist
+  
+  build-sdist:
+    # build sdist and make sure we can use it at least on linux
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python 
+      uses: actions/setup-python@v4
+      with:
+          python-version: 3.10
+    - name: Build sdist
+      run: |
+          pip install build
+          python -m build . --sdist
+    - name: Test sdist
+      run: |
+          pip install ./dist/*.tar.gz
+          python multi_agent_ale_py/tests/test_ale_python_wrapper.py
+    - name: Store wheels
+      uses: actions/upload-artifact@v4
+      with:
+        name: dist-sdist
+        path: dist
+
+  build-native-wheels:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+          # macos-13 is x86, macos-14 is M1 ARM
+          os: [windows-latest, macos-13, macos-14]
+          python-version: ['3.8', '3.9', '3.10', '3.11', '3.12', '3.13']
+    steps:
+    - uses: actions/checkout@v3
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v4
       with:
-        python-version: ${{ matrix.python-version }}
-
-    - name: Install cibuildwheel
-      run: python3 -m pip install cibuildwheel==2.11.2
-
+          python-version: ${{ matrix.python-version }}
     - name: Build wheels
-      run: python3 -m cibuildwheel --output-dir wheelhouse
-      env:
-        CIBW_SKIP: "*musllinux* pp* *-manylinux_i686"
-        CIBW_BUILD_VERBOSITY: 1
-
-    - uses: actions/upload-artifact@v3
+      shell: bash
+      run: |
+          pip wheel . --no-deps -w dist
+    - name: Run integration test on native built wheel
+      shell: bash
+      run: |
+          pip install dist/*.whl
+          python scripts/integration_test.py
+    - name: Store wheels
+      uses: actions/upload-artifact@v4
       with:
-        path: ./wheelhouse/*.whl
+        name: dist-native-${{ matrix.os }}-${{ matrix.python-version }}
+        path: dist
 
-  build_macos:
-    name: Macos Wheels
-    runs-on: macos-11
-    strategy:
-      matrix:
-        python-version: ['3.10']
-
-    steps:
-    - uses: actions/checkout@v3
-    
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ matrix.python-version }}
-
-    - name: Install cibuildwheel
-      run: python3 -m pip install cibuildwheel==2.11.2
-
-    - name: Build wheels
-      run: python3 -m cibuildwheel --output-dir wheelhouse
-      env:
-        # Apple M1 and Intel
-        CIBW_ARCHS_MACOS: x86_64 arm64
-        CIBW_SKIP: "pp*"
-        CIBW_BUILD_VERBOSITY: 1
-
-    - uses: actions/upload-artifact@v3
-      with:
-        path: ./wheelhouse/*.whl
-
-  build_sdist:
-    name: Build Source Distribution
+  publish:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Build sdist
-        run: pipx run build --sdist
-
-      - uses: actions/upload-artifact@v3
-        with:
-          path: dist/*.tar.gz
-
-  upload_pypi:
-    needs: [build_linux, build_macos, build_sdist]
-    runs-on: ubuntu-latest
-
-    # upload to PyPI on every tag starting with 'v'
-    #if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    # alternatively, to publish when a GitHub Release is created, use the following rule:
+    needs:
+    - build-manylinux-wheels
+    - build-native-wheels
+    - build-sdist
     if: github.event_name == 'release' && github.event.action == 'published'
     steps:
-      - uses: actions/download-artifact@v3
-        with:
-          # unpacks default artifact into dist/
-          # if `name: artifact` is omitted, the action will create extra parent dir
-          name: artifact
-          path: dist
-
-      - uses: pypa/gh-action-pypi-publish@v1.5.0
-        with:
-          user: ${{ secrets.PYPI_USER }}
-          password: ${{ secrets.PYPI_PASSWORD }} 
-          # Recommend to upload to PyPI test for the first run
-          # repository_url: https://test.pypi.org/legacy/
-          skip_existing: true
-          verbose: true
+    - name: Download dists
+      uses: actions/download-artifact@v4
+      with:
+        pattern: dist-*
+        merge-multiple: true
+        path: dist
+    - name: Publish to pypi
+      uses: pypa/gh-action-pypi-publish@v1.5.0
+      with:
+        user: ${{ secrets.PYPI_USER }}
+        password: ${{ secrets.PYPI_PASSWORD }} 
+        # Recommend to upload to PyPI test for the first run
+        # repository_url: https://test.pypi.org/legacy/
+        skip_existing: true
+        verbose: true

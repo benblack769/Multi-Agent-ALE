@@ -1,0 +1,14 @@
+ARG ARCH=x86_64
+FROM quay.io/pypa/manylinux2014_${ARCH}
+
+RUN mkdir /work
+
+WORKDIR /work
+COPY ./ ./
+
+RUN /opt/python/cp313-cp313/bin/pip wheel . --no-deps -w dist
+RUN /opt/python/cp312-cp312/bin/pip wheel . --no-deps -w dist
+RUN /opt/python/cp311-cp311/bin/pip wheel . --no-deps -w dist
+RUN /opt/python/cp310-cp310/bin/pip wheel . --no-deps -w dist
+RUN /opt/python/cp39-cp39/bin/pip wheel . --no-deps -w dist
+RUN /opt/python/cp38-cp38/bin/pip wheel . --no-deps -w dist

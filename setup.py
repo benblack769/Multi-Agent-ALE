@@ -159,11 +159,11 @@ setup(
         )
     ],
     cmdclass={"build_ext": CMakeBuild},
-    packages=["multi_agent_ale_py"],
+    packages=["multi_agent_ale_py", "multi_agent_ale_py.tests.fixtures"],
     install_requires=[
         "numpy"
     ],
-    python_requires=">=3.9",
+    python_requires=">=3.8",
     include_package_data=True,
     classifiers=[
         "Development Status :: 5 - Production/Stable",
