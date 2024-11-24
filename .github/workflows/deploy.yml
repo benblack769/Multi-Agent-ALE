@@ -58,7 +58,8 @@ jobs:
       fail-fast: false
       matrix:
           # macos-13 is x86, macos-14 is M1 ARM
-          os: [windows-latest, macos-13, macos-14]
+          # windows builds don't currently work
+          os: [macos-13, macos-14]
           python-version: ['3.8', '3.9', '3.10', '3.11', '3.12', '3.13']
     steps:
     - uses: actions/checkout@v3
