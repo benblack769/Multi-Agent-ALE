@@ -13,15 +13,16 @@ jobs:
     - name: Set up Python 
       uses: actions/setup-python@v4
       with:
-          python-version: 3.10
+          python-version: '3.10'
     - name: Build manylinux container
       run: docker build -f .github/Dockerfile.build-manylinux . -t ma-ale-manylinux
     - name: Load wheels
       run: docker cp $(docker create --name tc ma-ale-manylinux):/work/dist ./dist
+    # inefficient to test all python versions, so just test manylinux wheel for python3.10 locally
     - name: Test wheel on python 3.10
       run: |
           pip install ./dist/*cp310*.whl
-          python multi_agent_ale_py/tests/test_ale_python_wrapper.py
+          python examples/python-interface/python_example.py  multi_agent_ale_py/tests/fixtures/tetris.bin
     - name: Store wheels
       uses: actions/upload-artifact@v4
       with:
@@ -36,7 +37,7 @@ jobs:
     - name: Set up Python 
       uses: actions/setup-python@v4
       with:
-          python-version: 3.10
+          python-version: '3.10'
     - name: Build sdist
       run: |
           pip install build
@@ -44,7 +45,7 @@ jobs:
     - name: Test sdist
       run: |
           pip install ./dist/*.tar.gz
-          python multi_agent_ale_py/tests/test_ale_python_wrapper.py
+          python examples/python-interface/python_example.py  multi_agent_ale_py/tests/fixtures/tetris.bin
     - name: Store wheels
       uses: actions/upload-artifact@v4
       with:
@@ -73,7 +74,7 @@ jobs:
       shell: bash
       run: |
           pip install dist/*.whl
-          python scripts/integration_test.py
+          python examples/python-interface/python_example.py  multi_agent_ale_py/tests/fixtures/tetris.bin
     - name: Store wheels
       uses: actions/upload-artifact@v4
       with:
